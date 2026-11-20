@@ -3,14 +3,24 @@ import shutil
 from tkinter.ttk import Style
 from turtle import width
 from typing import Iterator
-from agno.agent import Agent, RunResponseEvent
+from agno.agent import Agent
+from agno.run.agent import  RunOutputEvent
 from agno.utils.pprint import pprint_run_response
-from agno.embedder.openai import OpenAIEmbedder
+from agno.knowledge.embedder.sentence_transformer import SentenceTransformerEmbedder
+
+# from agno.knowledge.embedder.openai import OpenAIEmbedder
+# from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_community.vectorstores import FAISS
+# from langchain_core.prompts import ChatPromptTemplate
+# from langchain_core.runnables import RunnablePassthrough
+
 
 # from agno.knowledge.pdf_url import PDFUrlKnowledgeBase
-from agno.knowledge.url import UrlKnowledge
+from agno.knowledge.knowledge import Knowledge
 from agno.models.openai import OpenAIChat
 from agno.vectordb.lancedb import LanceDb, SearchType
+# from langchain_groq import ChatGroq
+from agno.models.groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,8 +30,9 @@ import base64
 from phoenix.otel import register
 
 # Set environment variables for Arize Phoenix
-os.environ["PHOENIX_CLIENT_HEADERS"] = f"api_key={os.getenv('ARIZE_PHOENIX_API_KEY')}"
-os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "https://app.phoenix.arize.com"
+# os.environ["PHOENIX_CLIENT_HEADERS"] = f"api_key={os.getenv('ARIZE_PHOENIX_API_KEY')}"
+os.environ["PHOENIX_API_KEY"] = os.getenv('ARIZE_PHOENIX_API_KEY')
+os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "https://app.phoenix.arize.com/s/harryaigemini"
 
 # Configure the Phoenix tracer
 tracer_provider = register(
@@ -30,42 +41,54 @@ tracer_provider = register(
 )
 
 
-st.set_page_config(page_title="Agentic RAG", layout="wide")
+st.set_page_config(page_title="Agentic RAG - Harry", layout="wide")
 
+tracer = tracer_provider.get_tracer(__name__)
 
+@tracer.chain
 def load_knowledge_base(urls: list[str] = None):
     """
     Returns the knowledge base for the agent.
     This function is used to load the knowledge base from a URL.
     """
-    knowledge_base = UrlKnowledge(
-        urls=urls or [],
+    knowledge_base = Knowledge(
+        # urls=urls or [],
         vector_db=LanceDb(
             table_name="mcp-docs-knowledge-base",
             uri="tmp/lancedb",
             search_type=SearchType.vector,
-            embedder=OpenAIEmbedder(id="text-embedding-3-small"),
+            embedder= SentenceTransformerEmbedder(
+                    id="sentence-transformers/all-MiniLM-L6-v2",
+                    dimensions=384, # Optional: auto-detected for common models
+                ), #OpenAIEmbedder(id="text-embedding-3-small"),
         ),
     )
-    knowledge_base.load()
+    # knowledge_base.load()
+    knowledge_base.insert(urls)
     return knowledge_base
 
 
 # Load the knowledge base: Comment after first run as the knowledge base is already loaded
+@tracer.chain
 def agentic_rag_response(
     urls: list[str] = None, query: str = ""
-) -> Iterator[RunResponseEvent]:
+) -> Iterator[RunOutputEvent]:
     knowledge_base = load_knowledge_base(urls)
 
     agent = Agent(
-        model=OpenAIChat(id="gpt-5-2025-08-07"),
+        # model=OpenAIChat(id="gpt-5-2025-08-07"),
+        model= Groq(
+            id="openai/gpt-oss-120b",
+            temperature=0,
+            api_key=os.getenv("GROQ_API_KEY")
+        ),
         knowledge=knowledge_base,
         search_knowledge=True,
         # show_tool_calls=True,
         markdown=True,
     )
 
-    response: Iterator[RunResponseEvent] = agent.run(query, stream=True)
+    response: Iterator[RunOutputEvent] = agent.run(query, stream=True)
 
     return response
 
@@ -151,7 +174,9 @@ if query:
         answer = ""
         answer_placeholder = st.empty()
         for content in response:
-            if hasattr(content, 'event') and content.event == "RunResponseContent":
+            #print(f"{content.event}")
+            if hasattr(content, 'event') and content.event == "RunContent":
+                #print(f"in IF \n{content.content}")
                 answer += content.content
                 answer_placeholder.markdown(answer, unsafe_allow_html=True)
 

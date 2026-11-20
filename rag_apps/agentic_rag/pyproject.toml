@@ -5,9 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "agno>=1.7.6",
+    "agno>=2.0.0",
     "arize-phoenix>=11.13.2",
-    "lancedb>=0.24.2",
+    "lancedb>=0.41.0",
     "openai>=1.97.1",
     "openinference-instrumentation-agno>=0.1.10",
     "opentelemetry-exporter-otlp>=1.35.0",
@@ -16,4 +16,11 @@ dependencies = [
     "sqlalchemy>=2.0.41",
     "streamlit>=1.47.1",
     "tantivy>=0.24.0",
+    "mistralai>=3.8.0",
+    "langchain>=1.5.2",
+    "langchain-groq>=1.2.1",
+    "langchain-huggingface>=1.2.3",
+    "sentence-transformers>=6.3.0",
+    "langchain-community>=0.4.2",
+    "faiss-cpu>=1.16.0",
 ]
